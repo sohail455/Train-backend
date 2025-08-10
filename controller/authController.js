@@ -4,6 +4,7 @@ const catchAsync = require("../utils/catchAsync");
 const jsonWebToken = require("jsonwebtoken");
 const { promisify } = require("util");
 const Mail = require("../utils/mail");
+const crypto = require('crypto')
 
 exports.SignUp = catchAsync(async (req, res, next) => {
   const user = await User.create({
@@ -78,11 +79,11 @@ exports.logout = catchAsync(async (req, res, next) => {
 
 exports.resrectTo =
   ([...roles]) =>
-  (req, res, next) => {
-    if (!roles.includes(req.user.role)) {
-      return next(new AppError("Your Not Allowed To Performe This Action"));
-    }
-  };
+    (req, res, next) => {
+      if (!roles.includes(req.user.role)) {
+        return next(new AppError("Your Not Allowed To Performe This Action"));
+      }
+    };
 
 exports.protect = catchAsync(async (req, res, next) => {
   /*problems cookies should be enabled before any routes declerations
@@ -152,7 +153,8 @@ exports.forgotPassword = catchAsync(async (req, res, next) => {
     await new Mail(user, url).sendToken();
     res.status(200).json({
       status: "success",
-      message: "Token sent to email!",
+      token,
+      message: `Token sent to ${user.email}!`,
     });
   } catch (err) {
     user.passwordResetToken = undefined;
@@ -161,3 +163,29 @@ exports.forgotPassword = catchAsync(async (req, res, next) => {
     return next(new AppError("problem with Sending Mail"), 500);
   }
 });
+
+exports.resetPassword = catchAsync(async (req, res, next) => {
+  const token = req.params.token
+  const passoerdResetToken = crypto.createHash('sha256').update(token).digest('hex')
+  console.log(passoerdResetToken)
+  const user = await User.findOne({
+    passwordResetToken: passoerdResetToken,
+    passwordResetTokenExpiresIn: { $gte: Date.now() }
+  })
+  if (!user) {
+    return next(new AppError("Token is Invalid or Expired!"))
+  }
+  user.password = req.body.password
+  user.passwordConfirm = req.body.passwordConfirm
+  await user.save()
+  user.passwordResetToken = undefined
+  user.passwordResetTokenExpiresIn = undefined
+  await user.save({ validateBeforeSave: false })
+  res.status(200).json({
+    message: "password updated",
+    data: {
+      data: user,
+    },
+  });
+
+})

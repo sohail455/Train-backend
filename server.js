@@ -9,7 +9,7 @@ const DB = process.env.DATA_BASE.replace(
   process.env.DATA_BASE_PASSWORD
 );
 
-mongoose.connect(DB).then(() => console.log("Database Connected Successfully"));
+mongoose.connect(DB).then(() => console.log("Database Connected Successfully")).catch(e => console.log(e.message));
 
 const port = process.env.PORT || 3000;
 app.listen(port, () => console.log(`Server is listening on port ${port}`));
