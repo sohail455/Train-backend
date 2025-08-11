@@ -1,13 +1,14 @@
 const User = require("../model/userModel");
+const TempUser = require("../model/tempUser");
 const AppError = require("../utils/appError");
 const catchAsync = require("../utils/catchAsync");
 const jsonWebToken = require("jsonwebtoken");
 const { promisify } = require("util");
 const Mail = require("../utils/mail");
-const crypto = require('crypto')
+const crypto = require("crypto");
 
 exports.SignUp = catchAsync(async (req, res, next) => {
-  const user = await User.create({
+  const user = await TempUser.create({
     name: req.body.name,
     email: req.body.email,
     password: req.body.password,
@@ -22,6 +23,9 @@ exports.SignUp = catchAsync(async (req, res, next) => {
     secure: process.env.NODE_ENV === "production",
     maxAge: 60 * 60 * 1000,
   });
+  const confToken = user.createConfirmationToken();
+  await user.save({ validateBeforeSave: false });
+  new Mail(user, confToken).sendGreatings();
 
   res.status(201).json({
     message: "sucess",
@@ -31,6 +35,43 @@ exports.SignUp = catchAsync(async (req, res, next) => {
     },
   });
 });
+
+exports.confirmEmail = async (req, res, next) => {
+  const token = req.params.token;
+  const emailConfirmToken = crypto
+    .createHash("sha256")
+    .update(token)
+    .digest("hex");
+
+  const tempUser = await TempUser.findOne({
+    confirmMailToken: emailConfirmToken,
+    confirmMailTokenExpire: { $gte: Date.now() },
+  }).select("+password +passwordConfirm");
+  try {
+    if (!tempUser) {
+      return next(new AppError("Confermation Token is Expired or Invalid"));
+    }
+
+    const user = await User.create({
+      name: tempUser.name,
+      email: tempUser.email,
+      password: tempUser.password,
+      passwordConfirm: tempUser.passwordConfirm,
+    });
+
+    await user.save({ validateBeforeSave: false });
+    await TempUser.deleteOne({ email: tempUser.email });
+    res.status(201).json({
+      message: "Registered Sucessfully!",
+      data: {
+        data: tempUser,
+      },
+    });
+  } catch (err) {
+    await TempUser.deleteOne({ email: tempUser.email });
+    return next(new AppError(err.message), 400);
+  }
+};
 
 exports.LogIn = catchAsync(async (req, res, next) => {
   const { email, password } = req.body;
@@ -79,11 +120,11 @@ exports.logout = catchAsync(async (req, res, next) => {
 
 exports.resrectTo =
   ([...roles]) =>
-    (req, res, next) => {
-      if (!roles.includes(req.user.role)) {
-        return next(new AppError("Your Not Allowed To Performe This Action"));
-      }
-    };
+  (req, res, next) => {
+    if (!roles.includes(req.user.role)) {
+      return next(new AppError("Your Not Allowed To Performe This Action"));
+    }
+  };
 
 exports.protect = catchAsync(async (req, res, next) => {
   /*problems cookies should be enabled before any routes declerations
@@ -146,11 +187,11 @@ exports.forgotPassword = catchAsync(async (req, res, next) => {
   }
   const token = user.createPasswordResetToken();
   await user.save({ validateBeforeSave: false });
-  //send mail with the link of
+
   try {
     const url = `${req.protocol}://${req.get("host")}/api/v1/users/resetPassword/${token}`;
-    // const url = `http:// localhost:800/api/v1/users/resetPassword/${token}`;
-    await new Mail(user, url).sendToken();
+
+    await new Mail(user, token).sendToken();
     res.status(200).json({
       status: "success",
       token,
@@ -165,27 +206,29 @@ exports.forgotPassword = catchAsync(async (req, res, next) => {
 });
 
 exports.resetPassword = catchAsync(async (req, res, next) => {
-  const token = req.params.token
-  const passoerdResetToken = crypto.createHash('sha256').update(token).digest('hex')
-  console.log(passoerdResetToken)
+  const token = req.params.token;
+  const passoerdResetToken = crypto
+    .createHash("sha256")
+    .update(token)
+    .digest("hex");
+  console.log(passoerdResetToken);
   const user = await User.findOne({
     passwordResetToken: passoerdResetToken,
-    passwordResetTokenExpiresIn: { $gte: Date.now() }
-  })
+    passwordResetTokenExpiresIn: { $gte: Date.now() },
+  });
   if (!user) {
-    return next(new AppError("Token is Invalid or Expired!"))
+    return next(new AppError("Token is Invalid or Expired!"));
   }
-  user.password = req.body.password
-  user.passwordConfirm = req.body.passwordConfirm
-  await user.save()
-  user.passwordResetToken = undefined
-  user.passwordResetTokenExpiresIn = undefined
-  await user.save({ validateBeforeSave: false })
+  user.password = req.body.password;
+  user.passwordConfirm = req.body.passwordConfirm;
+  await user.save();
+  user.passwordResetToken = undefined;
+  user.passwordResetTokenExpiresIn = undefined;
+  await user.save({ validateBeforeSave: false });
   res.status(200).json({
-    message: "password updated",
+    message: "password updated Successfully ✔",
     data: {
       data: user,
     },
   });
-
-})
+});
