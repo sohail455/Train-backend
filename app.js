@@ -6,6 +6,7 @@ const morgan = require("morgan");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const userRouter = require("./routers/userRouter");
+const tourRouter = require("./routers/tourRouter");
 const globalErrorHandler = require("./controller/errorController");
 /*******************************************************************************
  *                                Create Applicttion
@@ -22,6 +23,7 @@ app.use(express.json());
 app.use(cookieParser());
 //adding Endpoints
 app.use("/api/v1/users", userRouter);
+app.use("/api/v1/tours", tourRouter);
 
 app.use(globalErrorHandler);
 

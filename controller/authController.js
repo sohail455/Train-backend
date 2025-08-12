@@ -120,11 +120,11 @@ exports.logout = catchAsync(async (req, res, next) => {
 
 exports.resrectTo =
   ([...roles]) =>
-  (req, res, next) => {
-    if (!roles.includes(req.user.role)) {
-      return next(new AppError("Your Not Allowed To Performe This Action"));
-    }
-  };
+    (req, res, next) => {
+      if (!roles.includes(req.user.role)) {
+        return next(new AppError("Your Not Allowed To Performe This Action"));
+      }
+    };
 
 exports.protect = catchAsync(async (req, res, next) => {
   /*problems cookies should be enabled before any routes declerations
